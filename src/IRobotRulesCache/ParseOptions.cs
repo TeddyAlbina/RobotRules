@@ -1,14 +1,6 @@
-/*======================================================================
-== Copyright : BlueCurve (c)
-== Licence   : Gnu/GPL v2.x
-== Author    : Teddy Albina
-== Email     : bluecurveteam@gmail.com
-== Web site  : http://www.codeplex.com/BlueCurve
-========================================================================*/
-
 using System;
 
-namespace RobotRules
+namespace BlueCurve.Search.RobotRules.Abstractions
 {
     /// <summary>
     ///   Indicates how a robot control file is to be parsed.

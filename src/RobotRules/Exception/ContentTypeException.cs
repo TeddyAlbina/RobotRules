@@ -1,4 +1,4 @@
-namespace RobotRules.Exception
+namespace BlueCurve.Search.RobotRules.Exception
 {
     /// <summary>
     ///   The exception that is thrown when a robot control file has an inappropriate content type.

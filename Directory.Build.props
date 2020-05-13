@@ -1,0 +1,40 @@
+<Project>
+  <PropertyGroup>
+    <LangVersion>8.0</LangVersion>
+	  <Nullable>enable</Nullable>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <PackageProjectUrl>https://github.com/TeddyAlbina/RobotRules</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/TeddyAlbina/RobotRules.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>search engine, enterprise, cloud, bluecurve, robot, robotrules, rfc194</PackageTags>
+    <Company>BlueCurve Technology</Company>
+    <Authors>BlueCurve Technology</Authors>
+    <Copyright>(c) BlueCurve Technology $([System.DateTime]::UtcNow.Year.ToString())</Copyright>
+    <Product>BlueCurve Search</Product>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <DebugType>full</DebugType>
+  </PropertyGroup>
+  
+    
+  <!-- see: https://github.com/microsoft/Trill/blob/master/Sources/Directory.Build.props -->
+
+  <!--<PropertyGroup Condition="$(TargetFramework) == ''">
+    <PublishReadyToRun>true</PublishReadyToRun>
+  </PropertyGroup>-->
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.VisualStudio.Threading.Analyzers" PrivateAssets="All" Version="16.6.13" />
+    <PackageReference Include="SecurityCodeScan" Version="3.5.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>    
+    <PackageReference Include="NetFabric.Hyperlinq.Analyzer" Version="1.*">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>    
+    <PackageReference Include="IDisposableAnalyzers" Version="3.3.7">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+</Project>

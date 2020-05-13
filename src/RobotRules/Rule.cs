@@ -1,17 +1,9 @@
-/*======================================================================
-== Copyright : BlueCurve (c)
-== Licence   : Gnu/GPL v2.x
-== Author    : Teddy Albina
-== Email     : bluecurveteam@gmail.com
-== Web site  : http://www.codeplex.com/BlueCurve
-========================================================================*/
-
-namespace RobotRules
+namespace BlueCurve.Search.RobotRules
 {
     /// <summary>
     ///   Represents an Allow or Disallow rule associated with a partial URI.
     /// </summary>
-    internal struct Rule
+    internal readonly struct Rule
     {
         /// <summary>
         ///   Initialises a new Rule.
@@ -27,20 +19,19 @@ namespace RobotRules
             Priority = priority;
         }
 
-
         /// <summary>
         ///   The partial URI to which the rule applies.
         /// </summary>
-        public string PartialUri { get; private set; }
+        public string PartialUri { get; }
 
         /// <summary>
         ///   True if this is an Allow rule, or false for a Disallow rule.
         /// </summary>
-        public bool Allow { get; private set; }
+        public bool Allow { get; }
 
         /// <summary>
         ///   The zero-based index of the rule's parent record in the robot control file, a lower number indicating an earlier record (which takes priority over any later records that also partially match a given user agent token).
         /// </summary>
-        public int Priority { get; private set; }
+        public int Priority { get; }
     }
 }

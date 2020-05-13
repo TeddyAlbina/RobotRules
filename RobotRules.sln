@@ -1,0 +1,70 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30011.22
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BlueCurve.Search.RobotRules", "src\RobotRules\BlueCurve.Search.RobotRules.csproj", "{56C20859-5E0D-45BE-BD5E-FC91B91436AE}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BlueCurve.Search.RobotRules.Abstractions", "src\IRobotRulesCache\BlueCurve.Search.RobotRules.Abstractions.csproj", "{62DD687E-26E3-4BE4-904E-1EA23BAB2F61}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{77741DC5-13BD-4906-82F1-9FAD15AF15F6}"
+	ProjectSection(SolutionItems) = preProject
+		.editorconfig = .editorconfig
+		Directory.Build.props = Directory.Build.props
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BlueCurve.Search.RobotRules.Microsoft.Extensions.DependencyInjection", "src\BlueCurve.Search.RobotRules.Microsoft.Extensions.DependencyInjection\BlueCurve.Search.RobotRules.Microsoft.Extensions.DependencyInjection.csproj", "{764C4BF6-9A70-4959-B7CB-E9CB0A6B5ED8}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Debug|Mixed Platforms = Debug|Mixed Platforms
+		Debug|Win32 = Debug|Win32
+		Release|Any CPU = Release|Any CPU
+		Release|Mixed Platforms = Release|Mixed Platforms
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{56C20859-5E0D-45BE-BD5E-FC91B91436AE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{56C20859-5E0D-45BE-BD5E-FC91B91436AE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{56C20859-5E0D-45BE-BD5E-FC91B91436AE}.Debug|Mixed Platforms.ActiveCfg = Debug|Any CPU
+		{56C20859-5E0D-45BE-BD5E-FC91B91436AE}.Debug|Mixed Platforms.Build.0 = Debug|Any CPU
+		{56C20859-5E0D-45BE-BD5E-FC91B91436AE}.Debug|Win32.ActiveCfg = Debug|Any CPU
+		{56C20859-5E0D-45BE-BD5E-FC91B91436AE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{56C20859-5E0D-45BE-BD5E-FC91B91436AE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{56C20859-5E0D-45BE-BD5E-FC91B91436AE}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
+		{56C20859-5E0D-45BE-BD5E-FC91B91436AE}.Release|Mixed Platforms.Build.0 = Release|Any CPU
+		{56C20859-5E0D-45BE-BD5E-FC91B91436AE}.Release|Win32.ActiveCfg = Release|Any CPU
+		{62DD687E-26E3-4BE4-904E-1EA23BAB2F61}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{62DD687E-26E3-4BE4-904E-1EA23BAB2F61}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{62DD687E-26E3-4BE4-904E-1EA23BAB2F61}.Debug|Mixed Platforms.ActiveCfg = Debug|Any CPU
+		{62DD687E-26E3-4BE4-904E-1EA23BAB2F61}.Debug|Mixed Platforms.Build.0 = Debug|Any CPU
+		{62DD687E-26E3-4BE4-904E-1EA23BAB2F61}.Debug|Win32.ActiveCfg = Debug|Any CPU
+		{62DD687E-26E3-4BE4-904E-1EA23BAB2F61}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{62DD687E-26E3-4BE4-904E-1EA23BAB2F61}.Release|Any CPU.Build.0 = Release|Any CPU
+		{62DD687E-26E3-4BE4-904E-1EA23BAB2F61}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
+		{62DD687E-26E3-4BE4-904E-1EA23BAB2F61}.Release|Mixed Platforms.Build.0 = Release|Any CPU
+		{62DD687E-26E3-4BE4-904E-1EA23BAB2F61}.Release|Win32.ActiveCfg = Release|Any CPU
+		{764C4BF6-9A70-4959-B7CB-E9CB0A6B5ED8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{764C4BF6-9A70-4959-B7CB-E9CB0A6B5ED8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{764C4BF6-9A70-4959-B7CB-E9CB0A6B5ED8}.Debug|Mixed Platforms.ActiveCfg = Debug|Any CPU
+		{764C4BF6-9A70-4959-B7CB-E9CB0A6B5ED8}.Debug|Mixed Platforms.Build.0 = Debug|Any CPU
+		{764C4BF6-9A70-4959-B7CB-E9CB0A6B5ED8}.Debug|Win32.ActiveCfg = Debug|Any CPU
+		{764C4BF6-9A70-4959-B7CB-E9CB0A6B5ED8}.Debug|Win32.Build.0 = Debug|Any CPU
+		{764C4BF6-9A70-4959-B7CB-E9CB0A6B5ED8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{764C4BF6-9A70-4959-B7CB-E9CB0A6B5ED8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{764C4BF6-9A70-4959-B7CB-E9CB0A6B5ED8}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
+		{764C4BF6-9A70-4959-B7CB-E9CB0A6B5ED8}.Release|Mixed Platforms.Build.0 = Release|Any CPU
+		{764C4BF6-9A70-4959-B7CB-E9CB0A6B5ED8}.Release|Win32.ActiveCfg = Release|Any CPU
+		{764C4BF6-9A70-4959-B7CB-E9CB0A6B5ED8}.Release|Win32.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {287FA311-1755-4154-BDFE-8C356E4FAE86}
+	EndGlobalSection
+	GlobalSection(TestCaseManagementSettings) = postSolution
+		CategoryFile = RobotRules.vsmdi
+	EndGlobalSection
+EndGlobal

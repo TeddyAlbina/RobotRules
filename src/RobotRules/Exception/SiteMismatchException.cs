@@ -1,4 +1,4 @@
-namespace RobotRules.Exception
+namespace BlueCurve.Search.RobotRules.Exception
 {
     /// <summary>
     ///   The exception that is thrown when the specified URI does not match the site to which the robot control file referred.

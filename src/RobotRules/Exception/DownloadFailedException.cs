@@ -1,6 +1,6 @@
 using System;
 
-namespace RobotRules.Exception
+namespace BlueCurve.Search.RobotRules.Exception
 {
     /// <summary>
     ///   The exception that is thrown when a robot control file cannot be downloaded due to a transfer problem (not just an HTTP status code indicating failure).

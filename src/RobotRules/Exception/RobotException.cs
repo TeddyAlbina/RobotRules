@@ -1,6 +1,6 @@
 using System;
 
-namespace RobotRules.Exception
+namespace BlueCurve.Search.RobotRules.Exception
 {
     /// <summary>
     ///   The base class for exceptions thrown when an error occurs that is related to Internet robots.

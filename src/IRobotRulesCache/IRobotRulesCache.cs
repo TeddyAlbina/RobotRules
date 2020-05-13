@@ -1,13 +1,7 @@
-﻿/*======================================================================
-== Copyright : BlueCurve (c)
-== Licence   : Gnu/GPL v2.x
-== Author    : Teddy Albina
-== Email     : bluecurveteam@gmail.com
-== Web site  : http://www.codeplex.com/BlueCurve
-========================================================================*/
-using System;
+﻿using System;
+using System.Diagnostics.CodeAnalysis;
 
-namespace IRobotCache
+namespace BlueCurve.Search.RobotRules.Abstractions
 {
     /// <summary>
     /// Interface for robot cache
@@ -19,34 +13,35 @@ namespace IRobotCache
         /// </summary>
         /// <param name="uri">Url</param>
         /// <param name="content">Robots file content</param>
-        void Add(string uri, string content);
+        void Add([DisallowNull] string uri, [DisallowNull]string content);
         /// <summary>
         /// Delete a fil from the cache
         /// </summary>
         /// <param name="uri">Url</param>
-        void Delete(string uri);
+        void Delete([DisallowNull]string uri);
         /// <summary>
         /// Update a document
         /// </summary>
         /// <param name="uri">Url</param>
         /// <param name="content">Robots file content</param>
-        void Update(string uri, string content);
+        void Update([DisallowNull] string uri, [DisallowNull] string content);
         /// <summary>
         /// Check if a document exists in the cache
         /// </summary>
         /// <param name="uri">Url</param>
-        bool CheckExist(string uri);
+        bool CheckExist([DisallowNull] string uri);
         /// <summary>
         /// Get the robots rule control file
         /// </summary>
         /// <param name="uri">Url</param>
         /// <returns>File content</returns>
-        string[] GetRobotControlFile(string uri);
+        [return: NotNull]
+        string[]? GetRobotControlFile([DisallowNull] string uri);
         /// <summary>
         /// Get datetime when a document was added
         /// </summary>
         /// <param name="uri">Url</param>
         /// <returns>DateTime?</returns>
-        DateTime? GetDate(string uri);
+        DateTime? GetDate([DisallowNull] string uri);
     }
 }

@@ -1,26 +1,18 @@
-/*======================================================================
-== Copyright : BlueCurve (c)
-== Licence   : Gnu/GPL v2.x
-== Author    : Teddy Albina
-== Email     : bluecurveteam@gmail.com
-== Web site  : http://www.codeplex.com/BlueCurve
-========================================================================*/
-
-using System;
+﻿using System;
 using System.Collections;
-using System.Configuration;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
-using System.Linq;
 using System.Net;
-using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
+using BlueCurve.Search.RobotRules.Abstractions;
+using BlueCurve.Search.RobotRules.Exception;
 using HtmlAgilityPack;
-using IRobotCache;
-using RobotRules.Exception;
 
-namespace RobotRules
+namespace BlueCurve.Search.RobotRules
 {
     /// <summary>
     ///   Parses robot control files and indicates which resources are accessible to named user agents.
@@ -28,7 +20,7 @@ namespace RobotRules
     /// <remarks>
     ///   Based on Martijn Koster's 1996 RFC Draft Memo on Web Robots Control, with optional support for the blank Disallow lines of 'A Standard for Robot Exclusion' (1994). At the time of writing (2005), the 1994 document is still current, but the 1996 document is essentially backwards-compatible.
     /// </remarks>
-    public sealed class RobotsFileParser : IDisposable
+    public sealed class RobotsFileParser : IRobotFileParser
     {
         /// <summary>
         ///   The filename used for robot control files.
@@ -68,51 +60,34 @@ namespace RobotRules
             = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
               + "$-_.+!*'(),{}|\\^~[]`:@&=";
 
+        private static readonly Regex ExtensionLineRegex = new Regex(@"^.+:\s*.+", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+        private readonly ConcurrentDictionary<string, Rule[]> rulesForUserAgents = new ConcurrentDictionary<string, Rule[]>(StringComparer.InvariantCultureIgnoreCase);
+
         /// <summary>
         ///   Data access layer object
         /// </summary>
-        private readonly IRobotRulesCache _database;
-
-
-        // Fields
-
-
-        //private Hashtable _rulesForUserAgents = new Hashtable(  // string -> Rule[]
-        //	new CaseInsensitiveHashCodeProvider(), new CaseInsensitiveComparer()
-        //	);
-
-
-        private readonly Hashtable _rulesForUserAgents = new Hashtable(
-            StringComparer.InvariantCultureIgnoreCase
-            );
-
-
-        // Properties
-
-        // Constructors
+        private readonly IRobotRulesCache? robotRulesCache;
 
         /// <summary>
-        ///   Initialises a new RobotsFileParser.
+        /// Initializes a new instance of the <see cref="RobotsFileParser"/> class.
+        /// </summary>
+        /// <param name="robotRulesCache">The robot rules cache.</param>
+        public RobotsFileParser([DisallowNull] IRobotRulesCache robotRulesCache)
+        {
+            this.Options = ParseOptions.Defaults;
+
+            this.robotRulesCache = robotRulesCache;
+
+            this.Clear();
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="RobotsFileParser"/> class.
         /// </summary>
         public RobotsFileParser()
         {
-            Options = ParseOptions.Defaults;
-            string cachelib = ConfigurationManager.AppSettings["CacheLibrary"];
 
-            if (!string.IsNullOrEmpty(cachelib))
-            {
-                var asm = Assembly.Load(Path.Combine(Assembly.GetExecutingAssembly().Location, cachelib));
-                var type =
-                    asm.GetTypes().SingleOrDefault(x => x.GetInterface("IRobotCache.IRobotRulesCache", false) != null);
-
-                if (type != null)
-                    this._database = (IRobotRulesCache)Activator.CreateInstance(type);
-                else
-                    throw new ApplicationException(
-                        "Unable to find implementation of 'IRobotCache.IRobotRulesCache' into assembly : " + cachelib);
-            }
-
-            this.Clear();
         }
 
 
@@ -180,12 +155,12 @@ namespace RobotRules
         /// <remarks>
         ///   The URI includes the scheme and authority but no path segments. This would usually correspond to the Web site's home page.
         /// </remarks>
-        public Uri SiteBase { get; private set; }
+        public Uri? SiteBase { get; private set; }
 
         /// <summary>
         ///   User agent for download robots file
         /// </summary>
-        public string LocalUserAgent { get; set; }
+        public string? LocalUserAgent { get; set; }
 
 
         // Methods
@@ -195,9 +170,9 @@ namespace RobotRules
         /// </summary>
         public void Clear()
         {
-            _rulesForUserAgents.Clear();
-            SiteBase = null;
-            AllRestricted = false;
+            this.rulesForUserAgents.Clear();
+            this.SiteBase = null;
+            this.AllRestricted = false;
         }
 
 
@@ -206,12 +181,9 @@ namespace RobotRules
         /// </summary>
         /// <returns> The regular expression options to be used. </returns>
         private RegexOptions GetRegexOptions()
-        {
-            return ((Options & ParseOptions.IgnoreFieldNameCase) != 0)
-                       ? RegexOptions.IgnoreCase
-                       : RegexOptions.None;
-        }
-
+            => ((this.Options & ParseOptions.IgnoreFieldNameCase) != 0)
+            ? RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled
+            : RegexOptions.CultureInvariant | RegexOptions.Compiled;
 
         /// <summary>
         ///   Determines whether a normalised line from a robot control file is a User-agent line.
@@ -219,21 +191,25 @@ namespace RobotRules
         /// <param name="line"> The line. </param>
         /// <param name="userAgent"> The user agent string, or null. </param>
         /// <returns> True if the line is a User-agent line, else false. </returns>
-        private bool IsUserAgentLine(string line, out string userAgent)
+
+        private bool IsUserAgentLine(string line, [MaybeNullWhen(false)] out string? userAgent)
         {
             userAgent = null;
 
-            if (Regex.IsMatch(line, @"^User-agent:\s*.+", GetRegexOptions()))
+            if (Regex.IsMatch(line, @"^User-agent:\s*.+", this.GetRegexOptions()))
             {
                 userAgent = line.Substring("User-agent:".Length).Trim();
 
                 // The user agent must be an RFC 1945 token, but to be permissive in reading
                 // we will try to truncate it to a valid token if it is not entirely valid.
 
-                int tokenLength = GetRfc1945TokenValidLength(userAgent);
+                int tokenLength = this.GetRfc1945TokenValidLength(userAgent);
 
-                if (tokenLength > 0) // entirely valid, or can be truncated to be valid
+                // entirely valid, or can be truncated to be valid
+                if (tokenLength > 0)
+                {
                     userAgent = userAgent.Substring(0, tokenLength);
+                }
             }
 
             return (userAgent != null);
@@ -247,34 +223,33 @@ namespace RobotRules
         /// <param name="allow"> Whether the line is an Allow line. </param>
         /// <param name="paths"> The valid paths to which the rule refers, or null. </param>
         /// <returns> True if the line is an Allow or Disallow line, else false. </returns>
-        private bool IsAllowOrDisallowLine(string line, out bool allow, out string[] paths)
+        private bool IsAllowOrDisallowLine(string line, out bool allow, [MaybeNullWhen(false)] out string[] paths)
         {
             paths = null;
             allow = false;
 
             // Handle the blank Disallow line (1994 spec)
 
-            if ((Options | ParseOptions.AcceptBlankDisallow) != 0
-                && Regex.IsMatch(line, "^Disallow:$", GetRegexOptions()))
+            if ((this.Options | ParseOptions.AcceptBlankDisallow) != 0 && Regex.IsMatch(line, "^Disallow:$", this.GetRegexOptions()))
             {
                 line = "Allow: /"; // allowing everything (1996 spec) is disallowing nothing (1994)
             }
 
             // Now check the line properly
 
-            if (Regex.IsMatch(line, @"^Allow:\s*.+", GetRegexOptions()))
+            if (Regex.IsMatch(line, @"^Allow:\s*.+", this.GetRegexOptions()))
             {
                 paths = line.Substring("Allow:".Length).Trim().Split(null);
                 allow = true;
             }
-            else if (Regex.IsMatch(line, @"^Disallow:\s*.+", GetRegexOptions()))
+            else if (Regex.IsMatch(line, @"^Disallow:\s*.+", this.GetRegexOptions()))
             {
                 paths = line.Substring("Disallow:".Length).Trim().Split(null);
             }
 
             if (paths != null) // found a path, or several (delimited by whitespace)
             {
-                var validPaths = new ArrayList(paths);
+                var validPaths = new List<string>(paths);
 
                 for (int i = 0; i < validPaths.Count; i++)
                 {
@@ -282,14 +257,14 @@ namespace RobotRules
                     // standard insists on a leading '/' for Allow rules, but we always want
                     // to store one anyway and it's good to be permissive in what we read.)
 
-                    if (!((string)validPaths[i]).StartsWith("/"))
+                    if (!validPaths[i].StartsWith("/"))
                     {
                         validPaths[i] = "/" + (string)validPaths[i];
                     }
 
                     // Discard the path if it isn't valid
 
-                    if (!IsValidPathForRule((string)validPaths[i], allow))
+                    if (!this.IsValidPathForRule((string)validPaths[i], allow))
                     {
                         validPaths.RemoveAt(i);
                         i--;
@@ -300,7 +275,7 @@ namespace RobotRules
 
                 if (validPaths.Count > 0) // repopulate the array with only the valid ones
                 {
-                    paths = (string[])validPaths.ToArray(typeof(string));
+                    paths = validPaths.ToArray();
                 }
             }
 
@@ -313,13 +288,13 @@ namespace RobotRules
         /// </summary>
         /// <param name="uri"> The URI to be tested. </param>
         /// <returns> True if the URI contains any incorrectly formed character escape. </returns>
-        private static bool ContainsInvalidCharEscapes(string uri)
+        private static bool ContainsInvalidCharEscapes(string? uri)
         {
             int pos = 0;
 
             if (uri != null)
             {
-                if (uri.Length > 2 && uri.LastIndexOf("%", System.StringComparison.Ordinal) > uri.Length - 3)
+                if (uri.Length > 2 && uri.LastIndexOf("%", StringComparison.Ordinal) > uri.Length - 3)
                 {
                     return true; // % not followed by two characters
                 }
@@ -350,7 +325,7 @@ namespace RobotRules
         /// <param name="s"> The string to be tested. </param>
         /// <param name="isAllowRule"> Whether the rule is an Allow rule. </param>
         /// <returns> True if the string is a valid path, else false. </returns>
-        private static bool IsValidPathForRule(string s, bool isAllowRule)
+        private bool IsValidPathForRule(string s, bool isAllowRule)
         {
             bool validPath = false;
 
@@ -362,20 +337,19 @@ namespace RobotRules
             {
                 if (s != "/robots.txt") // "The /robots.txt URL ... must not appear in ... rules."
                 {
-                    validPath = (s == "/") || IsRfc1808Path(s.TrimStart('/'));
+                    validPath = (s == "/") || this.IsRfc1808Path(s.TrimStart('/'));
                 }
             }
 
             return validPath;
         }
 
-
         /// <summary>
         ///   Returns the number of leading characters in a string that form a valid token, as defined by RFC 1945.
         /// </summary>
         /// <param name="s"> The string to be tested. </param>
         /// <returns> The number of leading characters that form a valid token. </returns>
-        private static int GetRfc1945TokenValidLength(string s)
+        private int GetRfc1945TokenValidLength(string s)
         {
             for (int i = 0; i < s.Length; i++)
             {
@@ -388,35 +362,30 @@ namespace RobotRules
             return s.Length; // the entire string was valid, *or* the string was empty
         }
 
-
         /// <summary>
         ///   Determines whether a string is a token, as defined by RFC 1945.
         /// </summary>
         /// <param name="s"> The string to be tested. </param>
         /// <returns> True if the string is a valid token, else false. </returns>
-        public static bool IsRfc1945Token(string s)
-        {
-            return (!string.IsNullOrEmpty(s) && s.Length == GetRfc1945TokenValidLength(s));
-        }
-
+        public bool IsRfc1945Token(string? s) => (!string.IsNullOrEmpty(s) && s.Length == this.GetRfc1945TokenValidLength(s));
 
         /// <summary>
         ///   Determines whether a normalised line from a robot control file matches the specification for an extension (i.e. some future addition to the format).
         /// </summary>
         /// <param name="line"> The line. </param>
         /// <returns> True if the line is an extension, else false. </returns>
-        private static bool IsExtensionLine(string line)
+        private bool IsExtensionLine(string line)
         {
             // An extension line takes the form
             // <RFC 1945 token> ':' <optional whitespace> <value>
 
-            if (Regex.IsMatch(line, @"^.+:\s*.+"))
+            if (!string.IsNullOrWhiteSpace(line) && ExtensionLineRegex.IsMatch(line))
             {
                 string token = line.Substring(0, line.IndexOf(':')); // everything before the colon
 
-                if (IsRfc1945Token(token))
+                if (this.IsRfc1945Token(token))
                 {
-                    string rhs = line.Substring(line.IndexOf(":", StringComparison.Ordinal) + 1).Trim();
+                    var rhs = line.Substring(line.IndexOf(":", StringComparison.Ordinal) + 1).Trim();
 
                     if (rhs.Length > 0) // must be at least one character
                     {
@@ -428,13 +397,12 @@ namespace RobotRules
             return false;
         }
 
-
         /// <summary>
         ///   Converts a line from a robot control file into a normal form by removing leading and trailing whitespace and comments.
         /// </summary>
         /// <param name="line"> The line. </param>
-        /// <returns> The normalised line. </returns>
-        private static string NormaliseLine(string line)
+        /// <returns> The normalized line. </returns>
+        private string NormalizeLine(string line)
         {
             if (line.IndexOf("#", System.StringComparison.Ordinal) != -1) // there is a comment
             {
@@ -450,25 +418,20 @@ namespace RobotRules
         /// </summary>
         /// <param name="userAgents"> The set of user agent tokens (ArrayList of string). </param>
         /// <param name="rules"> The set of rules (ArrayList of Rule). </param>
-        /// <param name="target"> The hashtable to be added to (Hashtable of string -> Rule[]). </param>
-        private static void CommitRules(ArrayList userAgents, ArrayList rules, Hashtable target)
+        private void CommitRules(IEnumerable<string> userAgents, Rule[] rules)
         {
-            if (rules != null && userAgents != null && rules.Count > 0 && userAgents.Count > 0)
+            if (rules != null && userAgents != null)
             {
-                var rulesAsArray = (Rule[])rules.ToArray(typeof(Rule));
-
-                foreach (string agent in userAgents)
+                foreach (var agent in userAgents)
                 {
                     // "The robot must obey the first record in /robots.txt that contains a
                     // User-agent line whose value contains the name token of the robot as a
                     // [case-insensitive] substring."
                     // So, we'll ignore any later records for a previously-seen user agent.
-
-                    if (!target.ContainsKey(agent))
+                    if (!this.rulesForUserAgents.ContainsKey(agent))
                     {
                         // Add the rules for this particular user agent
-
-                        target[agent] = rulesAsArray.Clone();
+                        this.rulesForUserAgents[agent] = rules;
                     }
                 }
             }
@@ -480,13 +443,8 @@ namespace RobotRules
         /// </summary>
         /// <param name="s"> The string to be tested. </param>
         /// <returns> True if the string is a "path", else false. </returns>
-        public static bool IsRfc1808Path(string s)
+        public bool IsRfc1808Path([DisallowNull] string s)
         {
-            if (s == null)
-            {
-                throw new ArgumentNullException("s");
-            }
-
             // The grammar tells us this:
             // path		= fsegment *( "/" segment )
             // fsegment	= 1*pchar  <-- "one or more pchar"
@@ -508,7 +466,7 @@ namespace RobotRules
                     {
                         i += 2; // next two chars should be hex digits; check them later
                     }
-                    else if (s[i] != '/' && !IsRfc1808Pchar(s[i].ToString(CultureInfo.InvariantCulture)))
+                    else if (s[i] != '/' && !this.IsRfc1808Pchar(s[i].ToString(CultureInfo.InvariantCulture)))
                     {
                         return false; // invalid character
                     }
@@ -528,13 +486,8 @@ namespace RobotRules
         /// </summary>
         /// <param name="s"> The string to be tested. </param>
         /// <returns> True if the string is a "pchar", else false. </returns>
-        private static bool IsRfc1808Pchar(string s)
+        private bool IsRfc1808Pchar([DisallowNull] string s)
         {
-            if (s == null)
-            {
-                throw new ArgumentNullException("s");
-            }
-
             if (s.Length == 1) // single character
             {
                 return (Rfc1808SinglePchars.IndexOf(s, System.StringComparison.Ordinal) != -1);
@@ -554,17 +507,16 @@ namespace RobotRules
         /// <param name="uri"> The URI of the robot control file. < </param>
         /// <param name="timeout"> The time, in milliseconds, after which the Web request should be aborted if no response has been received, or zero for the default timeout. </param>
         /// <returns> State if true the robot control file is fresh, else we need to download it. By default the function return true </returns>
-        private bool IsFresh(Uri uri, int timeout)
+        private bool IsFresh([DisallowNull] Uri uri, int timeout)
         {
-            if (uri == null)
-                throw new ArgumentNullException("uri");
-
             var req = (HttpWebRequest)WebRequest.Create(uri);
             req.AllowAutoRedirect = false;
             req.Method = "HEAD";
 
             if (!string.IsNullOrEmpty(this.LocalUserAgent) && this.LocalUserAgent != null)
+            {
                 req.UserAgent = this.LocalUserAgent;
+            }
 
             if (timeout != 0)
                 req.Timeout = timeout;
@@ -592,14 +544,17 @@ namespace RobotRules
                     resp.Close();
                 }
 
+                var latest = this.robotRulesCache?.GetDate(uri.OriginalString);
 
-                var latest = this._database.GetDate(uri.OriginalString);
-
-                if (!latest.HasValue)
+                if (latest == null)
+                {
                     return true;
+                }
 
                 if (latest.Value != date)
+                {
                     return false;
+                }
             }
             catch (WebException ex)
             {
@@ -619,7 +574,7 @@ namespace RobotRules
                         // "On server response indicating access restrictions (HTTP Status Code 401
                         // or 403) a robot should regard access to the site completely restricted."
 
-                        AllRestricted = true;
+                        this.AllRestricted = true;
                     }
                 }
                 else // some genuine HTTP transmission error, such as a timeout
@@ -641,33 +596,40 @@ namespace RobotRules
         /// <param name="uri"> The URI of the robot control file. </param>
         /// <param name="timeout"> The time, in milliseconds, after which the Web request should be aborted if no response has been received, or zero for the default timeout. </param>
         /// <returns> The lines from the robot control file, or an empty array if the file was not found. </returns>
-        private string[] DownloadRobotControlFile(Uri uri, int timeout)
+        private string[] DownloadRobotControlFile([DisallowNull] Uri uri, int timeout)
         {
-            if (uri == null)
-                throw new ArgumentNullException("uri");
-
             var isfresh = this.IsFresh(uri, timeout);
 
-            bool isexist = this._database.CheckExist(uri.OriginalString);
+            var isexist = this.robotRulesCache.CheckExist(uri.OriginalString);
+
             if (isexist && isfresh)
             {
-                string[] file = this._database.GetRobotControlFile(uri.OriginalString);
+                var file = this.robotRulesCache.GetRobotControlFile(uri.OriginalString);
+
                 if (file != null)
+                {
                     return file;
+                }
+
                 isexist = false;
-                this._database.Delete(uri.OriginalString);
+
+                this.robotRulesCache.Delete(uri.OriginalString);
             }
 
-            var lines = new ArrayList();
+            var lines = new List<string>();
             var sb = new StringBuilder();
 
             var req = (HttpWebRequest)WebRequest.Create(uri);
 
             if (!string.IsNullOrEmpty(this.LocalUserAgent) && this.LocalUserAgent != null)
+            {
                 req.UserAgent = this.LocalUserAgent;
+            }
 
             if (timeout != 0)
+            {
                 req.Timeout = timeout;
+            }
 
             // "On server response indicating Redirection (HTTP Status Code 3xx) a robot should
             // follow the redirects until a resource can be found." - this is dealt with already,
@@ -692,7 +654,7 @@ namespace RobotRules
 
                     using (var reader = new StreamReader(resp.GetResponseStream()))
                     {
-                        string currentLine = null;
+                        string? currentLine = null;
                         while ((currentLine = reader.ReadLine()) != null)
                         {
                             lines.Add(currentLine);
@@ -704,10 +666,14 @@ namespace RobotRules
 
                     // Add data to the database
                     if (isexist)
-                        this._database.Update(uri.OriginalString, sb.ToString());
+                    {
+                        this.robotRulesCache.Update(uri.OriginalString, sb.ToString());
+                    }
 
                     if (!isexist)
-                        this._database.Add(uri.OriginalString, sb.ToString());
+                    {
+                        this.robotRulesCache.Add(uri.OriginalString, sb.ToString());
+                    }
 
                     resp.Close();
                 }
@@ -730,7 +696,7 @@ namespace RobotRules
                         // "On server response indicating access restrictions (HTTP Status Code 401
                         // or 403) a robot should regard access to the site completely restricted."
 
-                        AllRestricted = true;
+                        this.AllRestricted = true;
                     }
                 }
                 else // some genuine HTTP transmission error, such as a timeout
@@ -743,7 +709,7 @@ namespace RobotRules
                 }
             }
 
-            return (string[])lines.ToArray(typeof(string));
+            return lines.ToArray();
         }
 
 
@@ -751,7 +717,7 @@ namespace RobotRules
         ///   Reads and interprets the contents of a Web site's robot control file.
         /// </summary>
         /// <param name="site"> The URI of the Web site or any file on it. </param>
-        public void Parse(Uri site)
+        public void Parse([DisallowNull] Uri site)
         {
             this.Parse(site, 0); // default timeout
         }
@@ -762,16 +728,11 @@ namespace RobotRules
         /// </summary>
         /// <param name="site"> The URI of the Web site or any file on it. </param>
         /// <param name="timeout"> The time, in milliseconds, after which the Web request should be aborted if no response has been received, or zero for the default timeout. </param>
-        public void Parse(Uri site, int timeout)
+        public void Parse([DisallowNull] Uri site, int timeout)
         {
-            if (site == null)
-            {
-                throw new ArgumentNullException("site");
-            }
+            var robotsFile = this.GetRobotsFileUri(site);
 
-            var robotsFile = GetRobotsFileUri(site);
-
-            var content = DownloadRobotControlFile(robotsFile, timeout);
+            var content = this.DownloadRobotControlFile(robotsFile, timeout);
 
             this.Parse(content, site);
         }
@@ -782,17 +743,8 @@ namespace RobotRules
         /// </summary>
         /// <param name="file"> The robot control file. </param>
         /// <param name="site"> The URI of the Web site or any file on it. </param>
-        public void Parse(FileInfo file, Uri site)
+        public void Parse([DisallowNull] FileInfo file, [DisallowNull] Uri site)
         {
-            if (file == null)
-            {
-                throw new ArgumentNullException("file");
-            }
-            if (site == null)
-            {
-                throw new ArgumentNullException("site");
-            }
-
             string filename = file.FullName;
 
             if (!File.Exists(filename))
@@ -804,7 +756,7 @@ namespace RobotRules
 
             using (var reader = new StreamReader(filename))
             {
-                string currentLine = null;
+                string? currentLine = null;
                 while ((currentLine = reader.ReadLine()) != null)
                 {
                     lines.Add(currentLine);
@@ -822,23 +774,14 @@ namespace RobotRules
         /// </summary>
         /// <param name="robotsFileLines"> The lines of the file in sequential order. </param>
         /// <param name="site"> The URI of the Web site or any file on it. </param>
-        public void Parse(string[] robotsFileLines, Uri site)
+        public void Parse([DisallowNull] string[] robotsFileLines, [DisallowNull] Uri site)
         {
-            if (robotsFileLines == null)
-            {
-                throw new ArgumentNullException("robotsFileLines");
-            }
-            if (site == null)
-            {
-                throw new ArgumentNullException("site");
-            }
-
             this.Clear();
 
-            SiteBase = new Uri(site.GetLeftPart(UriPartial.Authority));
+            this.SiteBase = new Uri(site.GetLeftPart(UriPartial.Authority));
 
-            var userAgentsSoFar = new ArrayList();
-            var rulesSoFar = new ArrayList();
+            var userAgentsSoFar = new List<string>();
+            var rulesSoFar = new List<Rule>();
 
             bool lastLineWasUserAgent = false;
 
@@ -852,18 +795,17 @@ namespace RobotRules
 
             for (int i = 0; i < robotsFileLines.Length; i++)
             {
-                string line = NormaliseLine(robotsFileLines[i]);
+                string line = this.NormalizeLine(robotsFileLines[i]);
 
-                if (line != String.Empty) // not blank or a lone comment
+                if (!string.IsNullOrWhiteSpace(line)) // not blank or a lone comment
                 {
-                    string userAgent = null;
-                    if (IsUserAgentLine(line, out userAgent))
+                    if (this.IsUserAgentLine(line, out var userAgent) && !string.IsNullOrWhiteSpace(userAgent))
                     {
                         if (!lastLineWasUserAgent && rulesSoFar.Count > 0) // end of previous block
                         {
                             // Commit the queued-up rules for the previous block
 
-                            CommitRules(userAgentsSoFar, rulesSoFar, _rulesForUserAgents);
+                            this.CommitRules(userAgentsSoFar, rulesSoFar.ToArray());
 
                             userAgentsSoFar.Clear();
                             rulesSoFar.Clear();
@@ -884,9 +826,7 @@ namespace RobotRules
                     }
                     else
                     {
-                        string[] paths;
-                        bool allow;
-                        if (IsAllowOrDisallowLine(line, out allow, out paths))
+                        if (this.IsAllowOrDisallowLine(line, out var allow, out var paths))
                         {
                             foreach (string path in paths)
                             {
@@ -895,7 +835,7 @@ namespace RobotRules
 
                             lastLineWasUserAgent = false;
                         }
-                        else if (IsExtensionLine(line)) // some future addition
+                        else if (this.IsExtensionLine(line)) // some future addition
                         {
                             lastLineWasUserAgent = false;
                         }
@@ -904,8 +844,7 @@ namespace RobotRules
             }
 
             // Commit the queued-up rules for the final block
-
-            CommitRules(userAgentsSoFar, rulesSoFar, _rulesForUserAgents);
+            this.CommitRules(userAgentsSoFar, rulesSoFar.ToArray());
         }
 
         /// <summary>
@@ -914,42 +853,45 @@ namespace RobotRules
         /// <param name="userAgent"> The user agent token. </param>
         /// <param name="resource"> The URI for the resource that the user agent wishes to access. </param>
         /// <returns> True if the user agent is permitted to access the resource, else false. </returns>
-        public bool IsAllowed(string userAgent, Uri resource)
+        public bool IsAllowed([DisallowNull] string userAgent, [DisallowNull] Uri resource)
         {
             if (string.IsNullOrEmpty(userAgent) || resource == null)
             {
                 throw new ArgumentNullException((userAgent == null) ? "userAgent" : "resource");
             }
-            if (SiteBase == null)
+
+            if (this.SiteBase == null)
             {
                 throw new InvalidOperationException("The parser has not been initialised.");
             }
-            if (!IsRfc1945Token(userAgent))
+
+            if (!this.IsRfc1945Token(userAgent))
             {
                 throw new InvalidUserAgentException(userAgent);
             }
-            if (resource.GetLeftPart(UriPartial.Authority).ToLower()
-                != SiteBase.GetLeftPart(UriPartial.Authority).ToLower()) // different sites!
+
+            if (!string.Equals(resource.GetLeftPart(UriPartial.Authority), this.SiteBase.GetLeftPart(UriPartial.Authority).ToLower(), StringComparison.OrdinalIgnoreCase)) // different sites!
             {
                 throw new SiteMismatchException();
             }
 
             string uri = resource.AbsolutePath;
 
-            if (AllRestricted)
+            if (this.AllRestricted)
             {
                 return false;
             }
+
             if (uri == "/robots.txt") // case-sensitive
             {
                 return true; // "The /robots.txt URL is always allowed"
             }
 
-            string knownAgent = FindMatchingUserAgent(userAgent);
+            var knownAgent = this.FindMatchingUserAgent(userAgent);
 
             if (knownAgent != null) // if no matching agent, assume it's okay
             {
-                var rulesForAgent = (Rule[])_rulesForUserAgents[knownAgent];
+                var rulesForAgent = this.rulesForUserAgents[knownAgent];
 
                 // "To evaluate if access to a URL is allowed, a robot must attempt to match
                 // the paths in Allow and Disallow lines against the URL, in the order they
@@ -958,7 +900,7 @@ namespace RobotRules
 
                 foreach (Rule rule in rulesForAgent)
                 {
-                    if (IsPathMatch(uri, rule.PartialUri)) // here's our first match
+                    if (this.IsPathMatch(uri, rule.PartialUri)) // here's our first match
                     {
                         return rule.Allow;
                     }
@@ -968,20 +910,14 @@ namespace RobotRules
             return true;
         }
 
-
         /// <summary>
         ///   Generates a regular expression from a path that contains the asterisk wildcard ('*'), replacing the asterisk with '.*' (indicating any character sequence) and all other metacharacters with their escape codes.
         /// </summary>
         /// <param name="path"> The path. </param>
         /// <returns> The corresponding regular expression. </returns>
-        private static string GetRegexFromWildcardPath(string path)
+        private string? GetRegexFromWildcardPath([DisallowNull] string path)
         {
-            if (path == null)
-            {
-                throw new ArgumentNullException("pattern");
-            }
-
-            string escaped = null;
+            string? escaped = null;
 
             for (int i = 0; i < path.Length; i++)
             {
@@ -997,12 +933,12 @@ namespace RobotRules
         /// </summary>
         /// <param name="path"> The path containing the hexadecimal escape sequences. </param>
         /// <returns> The path with any hexadecimal escape sequences replaced by their characters. </returns>
-        private static string UnescapeForPathComparison(string path)
+        private string? UnescapeForPathComparison(string path)
         {
             // "If a %xx encoded octet is encountered it is unencoded prior to comparison,
             // unless it is the '/' character, which has special meaning in a path."
 
-            string unescaped = null;
+            string? unescaped = null;
 
             if (path != null)
             {
@@ -1040,8 +976,6 @@ namespace RobotRules
         /// <returns> True if the first path is considered to match the second, else false. </returns>
         private bool IsPathMatch(string ourPath, string rulePath)
         {
-            var match = false;
-
             // 'ourPath' here *should* always be escaped, because of the Uri ctor's 'dontEscape'
             // parameter (the user either signals he has done it or gets the Uri ctor to do it).
             // However, you can create a Uri containing a raw '%' and specify true for 'dontEscape',
@@ -1057,12 +991,14 @@ namespace RobotRules
                     );
             }
 
-            ourPath = UnescapeForPathComparison(ourPath);
-            rulePath = UnescapeForPathComparison(rulePath);
+            var match = false;
 
-            if ((Options & ParseOptions.AsteriskWildcard) != 0 && rulePath.IndexOf("*", System.StringComparison.Ordinal) != -1)
+            ourPath = this.UnescapeForPathComparison(ourPath)!;
+            rulePath = this.UnescapeForPathComparison(rulePath)!;
+
+            if ((this.Options & ParseOptions.AsteriskWildcard) != 0 && rulePath.IndexOf("*", System.StringComparison.Ordinal) != -1)
             {
-                string pattern = "^" + GetRegexFromWildcardPath(rulePath) + "$";
+                string pattern = "^" + this.GetRegexFromWildcardPath(rulePath) + "$";
 
                 match = Regex.IsMatch(ourPath, pattern);
             }
@@ -1080,24 +1016,19 @@ namespace RobotRules
         /// </summary>
         /// <param name="userAgent"> The robot's user agent token. </param>
         /// <returns> The matching user agent token from the file, or null if nothing matched. </returns>
-        public string FindMatchingUserAgent(string userAgent)
+        public string? FindMatchingUserAgent([DisallowNull] string userAgent)
         {
-            string bestMatch = null;
+            string? bestMatch = null;
 
-            if (userAgent == null)
-            {
-                throw new ArgumentNullException("userAgent");
-            }
-
-            if (_rulesForUserAgents.ContainsKey(userAgent)) // exact match (case-insensitive)
+            if (this.rulesForUserAgents.ContainsKey(userAgent)) // exact match (case-insensitive)
             {
                 bestMatch = userAgent;
             }
             else // look for the highest-priority substring match
             {
-                var bestPriority = Int32.MaxValue;
+                var bestPriority = int.MaxValue;
 
-                foreach (DictionaryEntry entry in _rulesForUserAgents)
+                foreach (var entry in this.rulesForUserAgents)
                 {
                     var thisAgent = (string)entry.Key;
 
@@ -1105,7 +1036,7 @@ namespace RobotRules
                     {
                         // Pick any of the user agent's rules to determine its priority
 
-                        int thisPriority = ((Rule[])_rulesForUserAgents[thisAgent])[0].Priority;
+                        int thisPriority = this.rulesForUserAgents[thisAgent][0].Priority;
 
                         if (thisPriority < bestPriority) // lower is better
                         {
@@ -1119,7 +1050,7 @@ namespace RobotRules
             // If we've still found nothing suitable, use the 'all user agents' token,
             // if the file had one. (If it didn't, we will have to return null.)
 
-            if (bestMatch == null && _rulesForUserAgents.ContainsKey(TokenAllUserAgents))
+            if (bestMatch == null && this.rulesForUserAgents.ContainsKey(TokenAllUserAgents))
             {
                 bestMatch = TokenAllUserAgents;
             }
@@ -1133,31 +1064,9 @@ namespace RobotRules
         /// </summary>
         /// <param name="site"> The URI of the Web site or any file on it. </param>
         /// <returns> The expected URI of the robot control file. </returns>
-        public static Uri GetRobotsFileUri(Uri site)
-        {
-            if (site == null)
-            {
-                throw new ArgumentNullException("site", "Argument cannot be null.");
-            }
+        public Uri GetRobotsFileUri([DisallowNull] Uri site) => new Uri(site.GetLeftPart(UriPartial.Authority) + "/" + RobotsFileName);
 
-            return new Uri(site.GetLeftPart(UriPartial.Authority) + "/" + RobotsFileName);
-        }
-
-        #region IDisposable Membres
-
-        /// <summary>
-        ///   Called when object is disposed
-        /// </summary>
-        public void Dispose()
-        {
-            throw new NotImplementedException();
-        }
-
-        #endregion
-
-        #region Add
-
-        private static string GetHtmlMeta(string html, string meta)
+        private string? GetHtmlMeta(string html, string meta)
         {
             try
             {
@@ -1168,8 +1077,9 @@ namespace RobotRules
             }
             catch
             {
-                return null;
             }
+
+            return null;
         }
 
         /// <summary>
@@ -1178,28 +1088,35 @@ namespace RobotRules
         /// <param name="userAgent"> The user agent token. </param>
         /// <param name="html"> Content of the downloaded html file </param>
         /// <returns> Policy bool[index rule, follow rule] </returns>
-        public bool[] CheckHtmlRobotMetaTag(string userAgent, string html)
+        public (bool CanIndex, bool CanFollow) CheckHtmlRobotMetaTag(string userAgent, [DisallowNull] string html)
         {
-            if (!IsRfc1945Token(userAgent))
+            if (!this.IsRfc1945Token(userAgent))
                 throw new InvalidUserAgentException(userAgent);
+
             if (string.IsNullOrEmpty(html))
                 throw new HtmlContentEmptyException("The HTML content can't be null");
 
-            var bluebot = GetHtmlMeta(html, userAgent);
-            var robot = GetHtmlMeta(html, "robots");
+            var bluebot = this.GetHtmlMeta(html, userAgent);
+            var robot = this.GetHtmlMeta(html, "robots");
 
             // index, follow
-            bool[] index = { true, true };
-            string[] policy = null;
+            var index = new[] { true, true };
+            string[]? policy = null;
 
             if (!string.IsNullOrEmpty(bluebot))
+            {
                 policy = bluebot.Split(',');
+            }
 
             if (!string.IsNullOrEmpty(robot) && string.IsNullOrEmpty(bluebot))
+            {
                 policy = robot.Split(',');
+            }
 
             if (policy == null)
-                return index;
+            {
+                return (true, true);
+            }
 
             for (int i = 0; i < policy.Length; i++)
             {
@@ -1222,9 +1139,15 @@ namespace RobotRules
                 }
             }
 
-            return index;
+            return (index[0], index[1]);
         }
 
-        #endregion
+        /// <summary>
+        ///   Called when object is disposed
+        /// </summary>
+        public void Dispose()
+        {
+            throw new NotImplementedException();
+        }
     }
 }

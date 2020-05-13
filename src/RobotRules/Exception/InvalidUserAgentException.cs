@@ -1,14 +1,6 @@
-/*======================================================================
-== Copyright : BlueCurve (c)
-== Licence   : Gnu/GPL v2.x
-== Author    : Teddy Albina
-== Email     : bluecurveteam@gmail.com
-== Web site  : http://www.codeplex.com/BlueCurve
-========================================================================*/
-
 using System;
 
-namespace RobotRules.Exception
+namespace BlueCurve.Search.RobotRules.Exception
 {
     /// <summary>
     ///   The exception that is thrown when an invalid user agent token is specified.

@@ -1,4 +1,4 @@
-namespace RobotRules.Exception
+namespace BlueCurve.Search.RobotRules.Exception
 {
     /// <summary>
     ///   The exception that thrown when html content is empty

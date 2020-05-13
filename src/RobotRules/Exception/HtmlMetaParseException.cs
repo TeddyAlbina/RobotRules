@@ -1,4 +1,4 @@
-namespace RobotRules.Exception
+namespace BlueCurve.Search.RobotRules.Exception
 {
     /// <summary>
     ///   The exception that is thrown when an error occurs parsing html tag "robot"
